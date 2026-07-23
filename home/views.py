@@ -1,9 +1,11 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.contrib.auth.models import User
 from django.contrib import messages
 from .forms import UserRegistrationFrom, UserLoginFrom
 from django.contrib.auth import authenticate, login, logout
+from .models import Relation
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 
 class HomeView(View):
@@ -69,3 +71,14 @@ class UserLoginView(View):
                 return redirect('home:home')
             messages.error(request, "username/password is wrong!", "warning")
         return render(request, self.template_name, {'form': form})
+
+
+class UserProfileView(LoginRequiredMixin, View):
+    def get(self, request, user_id):
+        is_following = False
+        user = get_object_or_404(User, pk=user_id)
+        posts = user.posts.all()
+        relation = Relation.objects.filter(from_user=request.user, to_user=user)
+        if relation.exists():
+            is_following = True
+        return render(request, 'home/profile.html', {'user':user, 'posts':posts, 'is_following':is_following})

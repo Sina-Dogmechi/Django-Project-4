@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from home.forms import UserRegistrationFrom
 from django.contrib.messages import get_messages
+from home.models import Post, Relation
 
 
 class UserRegistrationFromTest(TestCase):
@@ -84,3 +85,59 @@ class UserLoginViewTest(TestCase):
         response = self.client.post(self.url + "?next=/about/sina/", {"username": "sina", "password": "sinapass"})
 
         self.assertRedirects(response, "/about/sina/")
+
+
+class UserProfileViewTest(TestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(username="sina", password="sinapass")
+        self.user2 = User.objects.create_user(username="jack", password="jackpass")
+        self.post1 = Post.objects.create(user=self.user2, body="first post", slug="first-post")
+        self.post2 = Post.objects.create(user=self.user2, body="second post", slug="second-post")
+
+        self.url = reverse("home:user_profile", args=[self.user2.id])
+
+    def test_profile_requires_login(self):
+        response = self.client.get(self.url)
+
+        self.assertRedirects(response, f"{reverse('home:user_login')}?next={self.url}")
+
+    def test_profile_loads_successfully(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "home/profile.html")
+
+    def test_profile_context_contains_correct_user(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.context["user"], self.user2)
+
+    def test_profile_context_contains_user_posts(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+        posts = response.context["posts"]
+
+        self.assertEqual(posts.count(), 2)
+        self.assertIn(self.post1, posts)
+        self.assertIn(self.post2, posts)
+
+    def test_is_following_false(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+
+        self.assertFalse(response.context["is_following"])
+
+    def test_is_following_true(self):
+        Relation.objects.create(from_user=self.user1, to_user=self.user2)
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+
+        self.assertTrue(response.context["is_following"])
+
+    def test_profile_returns_404_for_invalid_user(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(reverse("home:user_profile", args=[9999999]))
+
+        self.assertEqual(response.status_code, 404)
