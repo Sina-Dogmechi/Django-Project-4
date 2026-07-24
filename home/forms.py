@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from .models import Profile, Comment
+from .models import Profile, Comment, Post
 
 
 class UserRegistrationFrom(forms.Form):
@@ -49,4 +49,10 @@ class CommentCreateForm(forms.ModelForm):
 class CommentReplyForm(forms.ModelForm):
     class Meta:
         model = Comment
+        fields = ('body',)
+
+
+class PostCreateUpdateForm(forms.ModelForm):
+    class Meta:
+        model =  Post
         fields = ('body',)

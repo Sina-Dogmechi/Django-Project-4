@@ -2,12 +2,13 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.contrib.auth.models import User
 from django.contrib import messages
-from .forms import UserRegistrationFrom, UserLoginFrom, EditUserForm, CommentCreateForm, CommentReplyForm
+from .forms import UserRegistrationFrom, UserLoginFrom, EditUserForm, CommentCreateForm, CommentReplyForm, PostCreateUpdateForm
 from django.contrib.auth import authenticate, login, logout
 from .models import Relation, Post
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
+from django.utils.text import slugify
 
 
 class HomeView(View):
@@ -172,3 +173,35 @@ class PostDeleteView(LoginRequiredMixin, View):
         else:
             messages.error(request, 'you can\'t delete this post', 'danger')
         return redirect('home:home')
+
+
+class PostUpdateView(LoginRequiredMixin, View):
+    form_class = PostCreateUpdateForm
+
+    def setup(self, request, *args, **kwargs):
+        self.post_instance = get_object_or_404(Post, pk=kwargs['post_id'])
+        return super().setup(request, *args, **kwargs)
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        post = self.post_instance
+        if post.user.id != request.user.id:
+            messages.error(request, 'you can\'t update this post', 'danger')
+            return redirect('home:home')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, post_id):
+        form = self.form_class(instance=self.post_instance)
+        return render(request, 'home/update.html', {'form': form})
+
+    def post(self, request, post_id):
+        form = self.form_class(request.POST, instance=self.post_instance)
+        if form.is_valid():
+            new_post = form.save(commit=False)
+            new_post.slug = slugify(form.cleaned_data['body'][:30])
+            new_post.save()
+            messages.success(request, 'post updated successfully', 'success')
+            return redirect('home:post_detail', new_post.id, new_post.slug)
+        return render(request, 'home/update.html', {'form': form})

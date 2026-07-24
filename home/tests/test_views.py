@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from home.forms import UserRegistrationFrom
 from django.contrib.messages import get_messages
 from home.models import Post, Relation, Profile, Comment, Vote
+from django.utils.text import slugify
 
 
 class UserRegistrationFromTest(TestCase):
@@ -338,5 +339,63 @@ class PostDeleteViewTest(TestCase):
     def test_delete_non_existing_post_returns_404(self):
         self.client.login(username="sina", password="sinapass")
         response = self.client.get(reverse("home:post_delete", args=[9999]))
+
+        self.assertEqual(response.status_code, 404)
+
+
+class PostUpdateViewTest(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="sina", password="sinapass")
+        self.other_user = User.objects.create_user(username="jack", password="jackpass")
+        self.post = Post.objects.create(user=self.owner, body="Old body", slug="old-body")
+        self.url = reverse("home:post_update", args=[self.post.id])
+
+    def test_update_requires_login(self):
+        response = self.client.get(self.url)
+
+        self.assertRedirects(response, f"{reverse("home:user_login")}?next={self.url}")
+
+    def test_only_owner_can_access_update_page(self):
+        self.client.login(username="jack", password="jackpass")
+        response = self.client.get(self.url)
+        messages = [msg.message for msg in get_messages(response.wsgi_request)]
+
+        self.assertRedirects(response, reverse("home:home"))
+        self.assertIn("you can\'t update this post", messages)
+
+    def test_owner_can_open_update_page(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "home/update.html")
+
+    def test_owner_can_update_post(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"body":"This is updated post"})
+        self.post.refresh_from_db()
+
+        self.assertEqual(self.post.body, "This is updated post")
+        self.assertEqual(self.post.slug, slugify("This is updated post"))
+        self.assertRedirects(response, reverse("home:post_detail", args=[self.post.id, self.post.slug]))
+
+    def test_success_message_after_update(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"body":"This is updated post"})
+        messages = [msg.message for msg in get_messages(response.wsgi_request)]
+
+        self.assertIn("post updated successfully", messages)
+
+    def test_invalid_from_does_not_update_post(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"body":""})
+        self.post.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.post.body, "Old body")
+
+    def test_update_non_existing_post_returns_404(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(reverse("home:post_update", args=[9999]))
 
         self.assertEqual(response.status_code, 404)
