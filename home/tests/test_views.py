@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from home.forms import UserRegistrationFrom
 from django.contrib.messages import get_messages
-from home.models import Post, Relation
+from home.models import Post, Relation, Profile
 
 
 class UserRegistrationFromTest(TestCase):
@@ -193,3 +193,41 @@ class UserFollowUnfollowTest(TestCase):
 
         self.assertFalse(Relation.objects.filter(from_user=self.user1, to_user=self.user2).exists())
         self.assertEqual(messages[0].message, f"you are not following {self.user2.username}..!")
+
+
+class EditUserViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sina", email="sina@email.com", password="sinapass")
+        self.profile = Profile.objects.create(user=self.user, age=20, address="Tehran")
+        self.url = reverse("home:edit_user")
+
+    def test_edit_profile_requires_login(self):
+        response = self.client.get(self.url)
+        self.assertRedirects(response, f"{reverse("home:user_login")}?next={self.url}")
+
+    def test_edit_profile_get(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "home/edit_profile.html")
+
+    def test_edit_profile_successfully(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"age": 25, "address": "Tabriz", "email": "new@email.com"})
+
+        self.assertRedirects(response, reverse("home:user_profile", args=[self.user.id]))
+
+        self.profile.refresh_from_db()
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.profile.age, 25)
+        self.assertEqual(self.profile.address, "Tabriz")
+        self.assertEqual(self.user.email, "new@email.com")
+
+    def test_success_message_after_edit(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"age": 25, "address": "Tabriz", "email": "new@email.com"})
+        messages = [msg.message for msg in get_messages(response.wsgi_request)]
+
+        self.assertIn("profile edited successfully", messages)

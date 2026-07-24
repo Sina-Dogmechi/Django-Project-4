@@ -47,3 +47,9 @@ class Post(models.Model):
         if user_like.exists():
             return True
         return False
+
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    age = models.PositiveIntegerField(default=0)
+    address = models.TextField(null=True, blank=True)
