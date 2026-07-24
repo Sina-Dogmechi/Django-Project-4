@@ -2,10 +2,12 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.contrib.auth.models import User
 from django.contrib import messages
-from .forms import UserRegistrationFrom, UserLoginFrom, EditUserForm
+from .forms import UserRegistrationFrom, UserLoginFrom, EditUserForm, CommentCreateForm, CommentReplyForm
 from django.contrib.auth import authenticate, login, logout
-from .models import Relation
+from .models import Relation, Post
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
 
 
 class HomeView(View):
@@ -124,3 +126,38 @@ class EditUserView(LoginRequiredMixin, View):
             request.user.save()
             messages.success(request, 'profile edited successfully', 'success')
         return redirect('home:user_profile', request.user.id)
+
+
+class PostDetailView(View):
+    form_class = CommentCreateForm
+    form_class_reply = CommentReplyForm
+
+    def setup(self, request, *args, **kwargs):
+        self.post_instance = get_object_or_404(Post, pk=kwargs['post_id'], slug=kwargs['post_slug'])
+        return super().setup(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        form = self.form_class
+        comments = self.post_instance.pcomments.filter(is_reply=False)
+        can_like = False
+        if request.user.is_authenticated and not self.post_instance.user_can_like(request.user):
+            can_like = True
+        return render(request, 'home/detail.html', {'post': self.post_instance, 'form':form,
+                                                                         'comments': comments,
+                                                                         'reply_form': self.form_class_reply,
+                                                                          'can_like': can_like})
+
+    @method_decorator(login_required)
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request.POST)
+        if form.is_valid():
+            new_comment = form.save(commit=False)
+            new_comment.post = self.post_instance
+            new_comment.user = request.user
+            new_comment.save()
+            messages.success(request, 'Comment saved successfully', 'success')
+            return redirect('home:post_detail', self.post_instance.id, self.post_instance.slug)
+        comments = self.post_instance.pcomments.filter(is_reply=False)
+        return render(request, 'home/detail.html', {'post': self.post_instance, 'form':form,
+                                                                         'comments': comments,
+                                                                         'reply_form': self.form_class_reply})

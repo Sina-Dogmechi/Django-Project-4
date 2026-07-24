@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from .models import Profile
+from .models import Profile, Comment
 
 
 class UserRegistrationFrom(forms.Form):
@@ -35,3 +35,18 @@ class EditUserForm(forms.ModelForm):
     class Meta:
         model = Profile
         fields = ('age', 'address')
+
+
+class CommentCreateForm(forms.ModelForm):
+    class Meta:
+        model = Comment
+        fields = ('body',)
+        widgets = {
+            'body': forms.Textarea(attrs={'class': 'form-control'}),
+        }
+
+
+class CommentReplyForm(forms.ModelForm):
+    class Meta:
+        model = Comment
+        fields = ('body',)

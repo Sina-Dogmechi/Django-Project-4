@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from home.forms import UserRegistrationFrom
 from django.contrib.messages import get_messages
-from home.models import Post, Relation, Profile
+from home.models import Post, Relation, Profile, Comment, Vote
 
 
 class UserRegistrationFromTest(TestCase):
@@ -231,3 +231,75 @@ class EditUserViewTest(TestCase):
         messages = [msg.message for msg in get_messages(response.wsgi_request)]
 
         self.assertIn("profile edited successfully", messages)
+
+
+class PostDetailViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sina", password="sinapass")
+        self.user2 = User.objects.create_user(username="jack", password="jackpass")
+        self.post = Post.objects.create(user=self.user, body="This is my first post", slug="this-is-my-first-post")
+        self.comment = Comment.objects.create(user=self.user2, post=self.post, body="first comment")
+        self.url = reverse("home:post_detail", args=[self.post.id, self.post.slug])
+
+    def test_get_post_detail(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "home/detail.html")
+
+    def test_context_contains_posts(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.context["post"], self.post)
+
+    def test_context_contains_comments(self):
+        response = self.client.get(self.url)
+        comments = response.context["comments"]
+
+        self.assertEqual(comments.count(), 1)
+        self.assertEqual(comments.first(), self.comment)
+
+    def test_can_like_is_false_for_anonymous_user(self):
+        response = self.client.get(self.url)
+
+        self.assertFalse(response.context["can_like"])
+
+    def test_can_like_is_false_when_user_has_not_liked_post(self):
+        self.client.login(username="jack", password="jackpass")
+        response = self.client.get(self.url)
+
+        self.assertFalse(response.context["can_like"])
+
+    def test_can_like_is_true_when_user_has_liked_post(self):
+        Vote.objects.create(user=self.user2, post=self.post)
+        self.client.login(username="jack", password="jackpass")
+        response = self.client.get(self.url)
+
+        self.assertTrue(response.context["can_like"])
+
+    def test_post_comment_requires_login(self):
+        response = self.client.post(self.url, {"body":"new comment"})
+        login_url = reverse("home:user_login")
+
+        self.assertRedirects(response, f"{login_url}?next={self.url}")
+
+    def test_create_comment_successfully(self):
+        self.client.login(username="jack", password="jackpass")
+        response = self.client.post(self.url, {"body":"new comment"})
+
+        self.assertRedirects(response, self.url)
+        self.assertTrue(Comment.objects.filter(body="new comment", user=self.user2, post=self.post).exists())
+
+    def test_success_message_after_comment(self):
+        self.client.login(username="jack", password="jackpass")
+        response = self.client.post(self.url, {"body": "new comment"})
+        messages = [msg.message for msg in get_messages(response.wsgi_request)]
+
+        self.assertIn("Comment saved successfully", messages)
+
+    def test_invalid_comment_form(self):
+        self.client.login(username="jack", password="jackpass")
+        response = self.client.post(self.url, {"body": ""})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Comment.objects.count(), 1)
