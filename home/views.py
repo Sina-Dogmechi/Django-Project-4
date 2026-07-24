@@ -161,3 +161,14 @@ class PostDetailView(View):
         return render(request, 'home/detail.html', {'post': self.post_instance, 'form':form,
                                                                          'comments': comments,
                                                                          'reply_form': self.form_class_reply})
+
+
+class PostDeleteView(LoginRequiredMixin, View):
+    def get(self, request, post_id):
+        post = get_object_or_404(Post, pk=post_id)
+        if request.user.id == post.user.id:
+            post.delete()
+            messages.success(request, 'post deleted successfully', 'success')
+        else:
+            messages.error(request, 'you can\'t delete this post', 'danger')
+        return redirect('home:home')

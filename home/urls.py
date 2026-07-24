@@ -13,4 +13,5 @@ urlpatterns = [
     path('unfollow/<int:user_id>', views.UserUnfollowView.as_view(), name='user_unfollow'),
     path('edit_user/', views.EditUserView.as_view(), name='edit_user'),
     path('post/<int:post_id>/<slug:post_slug>/', views.PostDetailView.as_view(), name='post_detail'),
+    path('post/delete/<int:post_id>/', views.PostDeleteView.as_view(), name='post_delete'),
 ]

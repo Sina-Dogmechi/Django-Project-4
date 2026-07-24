@@ -303,3 +303,40 @@ class PostDetailViewTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Comment.objects.count(), 1)
+
+
+class PostDeleteViewTest(TestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(username="sina", password="sinapass")
+        self.user2 = User.objects.create_user(username="jack", password="jackpass")
+        self.post = Post.objects.create(user=self.user1, body="This is my first post", slug="this-is-my-first-post")
+        self.urls = reverse("home:post_delete", args=[self.post.id])
+
+    def test_delete_requires_login(self):
+        response = self.client.delete(self.urls)
+
+        self.assertRedirects(response, f"{reverse("home:user_login")}?next={self.urls}")
+
+    def test_post_owner_can_delete_post(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.urls)
+        messages = [msg.message for msg in get_messages(response.wsgi_request)]
+
+        self.assertRedirects(response, reverse("home:home"))
+        self.assertFalse(Post.objects.filter(id=self.post.id).exists())
+        self.assertIn("post deleted successfully", messages)
+
+    def test_other_users_cannot_delete_post(self):
+        self.client.login(username="jack", password="jackpass")
+        response = self.client.get(self.urls)
+        messages = [msg.message for msg in get_messages(response.wsgi_request)]
+
+        self.assertRedirects(response, reverse("home:home"))
+        self.assertTrue(Post.objects.filter(id=self.post.id).exists())
+        self.assertIn("you can\'t delete this post", messages)
+
+    def test_delete_non_existing_post_returns_404(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(reverse("home:post_delete", args=[9999]))
+
+        self.assertEqual(response.status_code, 404)
