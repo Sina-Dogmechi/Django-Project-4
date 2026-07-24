@@ -141,3 +141,55 @@ class UserProfileViewTest(TestCase):
         response = self.client.get(reverse("home:user_profile", args=[9999999]))
 
         self.assertEqual(response.status_code, 404)
+
+
+class UserFollowUnfollowTest(TestCase):
+    def setUp(self):
+        self.user1 = User.objects.create_user(username="sina", password="sinapass")
+        self.user2 = User.objects.create_user(username="jack", password="jackpass")
+        self.follow_url = reverse("home:user_follow", args=[self.user2.id])
+        self.unfollow_url = reverse("home:user_unfollow", args=[self.user2.id])
+
+    def test_follow_required_login(self):
+        response = self.client.get(self.follow_url)
+        self.assertRedirects(response, f"{reverse("home:user_login")}?next={self.follow_url}")
+
+    def test_follow_successfully(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.follow_url)
+        messages = list(get_messages(response.wsgi_request))
+
+        self.assertRedirects(response, reverse("home:user_profile", args=[self.user2.id]))
+        self.assertTrue(Relation.objects.filter(from_user=self.user1, to_user=self.user2).exists())
+        self.assertEqual(messages[0].message, f"you followed {self.user2.username}..!")
+
+    def test_follow_user_twice(self):
+        Relation.objects.create(from_user=self.user1, to_user=self.user2)
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.follow_url)
+        messages = list(get_messages(response.wsgi_request))
+
+        self.assertEqual(Relation.objects.filter(from_user=self.user1, to_user=self.user2).count(), 1)
+        self.assertEqual(messages[0].message, f"you already following {self.user2.username}..!")
+
+    def test_unfollow_required_login(self):
+        response = self.client.get(self.unfollow_url)
+        self.assertRedirects(response, f"{reverse("home:user_login")}?next={self.unfollow_url}")
+
+    def test_unfollow_successfully(self):
+        Relation.objects.create(from_user=self.user1, to_user=self.user2)
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.unfollow_url)
+        messages = list(get_messages(response.wsgi_request))
+
+        self.assertRedirects(response, reverse("home:user_profile", args=[self.user2.id]))
+        self.assertFalse(Relation.objects.filter(from_user=self.user1, to_user=self.user2).exists())
+        self.assertEqual(messages[0].message, f"you unfollowed {self.user2.username}..!")
+
+    def test_unfollow_when_relation_not_exist(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.unfollow_url)
+        messages = list(get_messages(response.wsgi_request))
+
+        self.assertFalse(Relation.objects.filter(from_user=self.user1, to_user=self.user2).exists())
+        self.assertEqual(messages[0].message, f"you are not following {self.user2.username}..!")
