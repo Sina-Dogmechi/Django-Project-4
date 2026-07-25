@@ -399,3 +399,53 @@ class PostUpdateViewTest(TestCase):
         response = self.client.get(reverse("home:post_update", args=[9999]))
 
         self.assertEqual(response.status_code, 404)
+
+
+class PostCreateViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="sina", password="sinapass")
+        self.url = reverse("home:post_create")
+
+    def test_create_requires_login(self):
+        response = self.client.get(self.url)
+
+        self.assertRedirects(response, f"{reverse("home:user_login")}?next={self.url}")
+
+    def test_create_page_loads(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "home/create.html")
+
+    def test_create_post_successfully(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"body":"This is my first post"})
+        post = Post.objects.first()
+
+        self.assertEqual(Post.objects.count(), 1)
+        self.assertEqual(post.user, self.user)
+        self.assertEqual(post.body, "This is my first post")
+        self.assertEqual(post.slug, slugify("This is my first post"))
+        self.assertRedirects(response, reverse("home:post_detail", args=[post.id, post.slug]))
+
+    def test_success_message_after_create(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"body":"This is my first post"})
+        messages = [msg.message for msg in get_messages((response.wsgi_request))]
+
+        self.assertIn("post created successfully", messages)
+
+    def test_created_post_belongs_to_logged_in_user(self):
+        self.client.login(username="sina", password="sinapass")
+        self.client.post(self.url, {"body":"This is my first post"})
+        post = Post.objects.first()
+
+        self.assertEqual(post.user.id, self.user.id)
+
+    def test_invalid_form_does_not_create_post(self):
+        self.client.login(username="sina", password="sinapass")
+        response = self.client.post(self.url, {"body": ""})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Post.objects.count(), 0)

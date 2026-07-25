@@ -205,3 +205,22 @@ class PostUpdateView(LoginRequiredMixin, View):
             messages.success(request, 'post updated successfully', 'success')
             return redirect('home:post_detail', new_post.id, new_post.slug)
         return render(request, 'home/update.html', {'form': form})
+
+
+class PostCreateView(LoginRequiredMixin, View):
+    form_class = PostCreateUpdateForm
+
+    def get(self, request):
+        form = self.form_class
+        return render(request, 'home/create.html', {'form': form})
+
+    def post(self, request):
+        form = self.form_class(request.POST)
+        if form.is_valid():
+            new_post = form.save(commit=False)
+            new_post.slug = slugify(form.cleaned_data['body'][:30])
+            new_post.user = request.user
+            new_post.save()
+            messages.success(request, 'post created successfully', 'success')
+            return redirect('home:post_detail', new_post.id, new_post.slug)
+        return render(request, 'home/create.html', {'form': form})
