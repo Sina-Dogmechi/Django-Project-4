@@ -45,3 +45,38 @@ class UserRegisterViewTest(APITestCase):
 
         self.assertEqual(User.objects.count(), 1)
         self.assertTrue(User.objects.filter(email="sina@email.com").exists())
+
+
+class UserProfileViewTest(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="sina@email", username="sina", password="sinapass")
+        self.url = reverse("api:profile")
+
+    def test_profile_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_profile_successfully(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["email"], self.user.email)
+        self.assertEqual(response.data["username"], self.user.username)
+
+    @mock.patch("api.views.update_profile")
+    def test_update_profile_successfully(self, mock_update_profile):
+        self.client.force_authenticate(user=self.user)
+        self.user.username = "new_username"
+        mock_update_profile.return_value = self.user
+        response = self.client.put(self.url, {"username": "new_username"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["username"], "new_username")
+        mock_update_profile.assert_called_once_with(user=self.user, username="new_username")
+
+    def test_update_profile_requires_authentication(self):
+        response = self.client.put(self.url, {"username": "new_name"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
