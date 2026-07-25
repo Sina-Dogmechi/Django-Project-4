@@ -35,3 +35,7 @@ class UserRegisterSerializer(serializers.Serializer):
         if data['password'] != data['password2']:
             raise serializers.ValidationError('Passwords must match')
         return data
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField()

@@ -80,3 +80,43 @@ class UserProfileViewTest(APITestCase):
         response = self.client.put(self.url, {"username": "new_name"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class UserChangePasswordViewTest(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="sina@email.com", username="sina", password="sinapass")
+        self.url = reverse("api:change_password")
+
+    def test_change_password_requires_authentication(self):
+        response = self.client.patch(self.url, {"new_password": "sinanewpass"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @mock.patch("api.views.change_password")
+    def test_change_password_successfully(self, mock_change_password):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(self.url, {"new_password": "sinanewpass"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_change_password.assert_called_once_with(user=self.user, new_password="sinanewpass")
+
+    def test_change_password_with_invalid_data(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(self.url, {"new_password": ""}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @mock.patch("api.views.change_password")
+    def test_change_password_calls_service_once(self, mock_change_password):
+        self.client.force_authenticate(user=self.user)
+        self.client.patch(self.url, {"new_password": "sinanewpass"}, format="json")
+
+        self.assertEqual(mock_change_password.call_count, 1)
+
+    def test_change_password_in_database(self): # Integration Test
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(self.url, {"new_password": "sinanewpass"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("sinanewpass"))

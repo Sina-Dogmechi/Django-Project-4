@@ -1,8 +1,8 @@
 from rest_framework.views import APIView
-from .serializers import UserSerializer, UserRegisterSerializer
+from .serializers import UserSerializer, UserRegisterSerializer, ChangePasswordSerializer
 from rest_framework.response import Response
 from rest_framework import status
-from .services import create_user, update_profile
+from .services import create_user, update_profile, change_password
 from rest_framework.permissions import IsAuthenticated
 
 
@@ -26,3 +26,14 @@ class UserProfileView(APIView):
         username = request.data.get('username')
         user = update_profile(user=request.user, username=username)
         return Response(UserSerializer(user).data)
+
+
+
+class UserChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        change_password(user=request.user, new_password=serializer.validated_data['new_password'])
+        return Response({'message': 'password changed successfully'})
