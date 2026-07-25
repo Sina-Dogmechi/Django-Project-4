@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest import mock
 from django.contrib.auth.models import User
+from .base import BaseAPITestCase
 
 
 class UserRegisterViewTest(APITestCase):
@@ -120,3 +121,44 @@ class UserChangePasswordViewTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("sinanewpass"))
+
+
+class UserDeactivateViewTest(BaseAPITestCase):
+    def setUp(self):
+        self.url = reverse("api:deactivate", args=[self.user.id])
+
+    def test_anonymous_user_cannot_deactivate_user(self):
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_normal_user_cannot_deactivate_user(self):
+        self.login_user()
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+
+    @mock.patch("api.views.deactivate_user")
+    def test_admin_can_deactivate_user(self, mock_deactivate):
+        self.login_admin()
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_deactivate.assert_called_once_with(user=self.user)
+
+    def test_user_not_found(self):
+        self.login_admin()
+        response = self.client.post(reverse("api:deactivate", args=[9999]))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data["message"], "user not found")
+
+    def test_user_becomes_inactive(self): # Integration Test
+        self.login_admin()
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
