@@ -1,7 +1,10 @@
 from django.test import TestCase
-from api.services import create_user, update_profile, change_password
+from api.services import create_user, update_profile, change_password, build_reset_password_link
 from unittest import mock
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
 
 
 class CreateUserServiceTest(TestCase):
@@ -119,3 +122,31 @@ class ChangePasswordServiceTest(TestCase):
 
         self.assertEqual(self.user.username, old_username)
         self.assertEqual(self.user.email, old_email)
+
+
+class BuildResetPasswordLinkServiceTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="sina@email.com", username="sina", password="sinapass")
+
+    def test_build_reset_password_link_successfully(self):
+        link = build_reset_password_link(self.user)
+
+        self.assertIsInstance(link, str)
+        self.assertNotEqual(link, "")
+
+    def test_link_contains_uid(self):
+        link = build_reset_password_link(self.user)
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+
+        self.assertIn(uid, link)
+
+    def test_link_contains_token(self):
+        link = build_reset_password_link(self.user)
+        token = default_token_generator.make_token(self.user)
+
+        self.assertIn(token, link)
+
+    def test_link_contains_reset_password_path(self):
+        link = build_reset_password_link(self.user)
+
+        self.assertIn("/accounts/reset-password/", link)
