@@ -1,10 +1,10 @@
 from rest_framework.views import APIView
-from .serializers import UserSerializer, UserRegisterSerializer, ChangePasswordSerializer
+from .serializers import UserSerializer, UserRegisterSerializer, ChangePasswordSerializer, ForgotPasswordSerializer
 from rest_framework.response import Response
 from rest_framework import status
-from .services import create_user, update_profile, change_password, deactivate_user
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .selectors import get_user_by_id
+from .services import create_user, update_profile, change_password, deactivate_user, build_reset_password_link, send_reset_password_email
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from .selectors import get_user_by_id, get_user_by_email
 
 
 class UserRegisterView(APIView):
@@ -50,3 +50,17 @@ class UserDeactivateView(APIView):
 
         deactivate_user(user=user)
         return Response({'message': 'user deactivated'}, status=status.HTTP_200_OK)
+
+
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = get_user_by_email(email=serializer.validated_data["email"])
+
+        if user:
+            reset_url = build_reset_password_link(user)
+            send_reset_password_email(user=user, reset_url=reset_url)
+        return Response({"message":"a reset link has been sent."})

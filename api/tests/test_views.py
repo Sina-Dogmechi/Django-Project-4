@@ -162,3 +162,53 @@ class UserDeactivateViewTest(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_active)
+
+
+class UserForgotPasswordViewTest(BaseAPITestCase):
+    def setUp(self):
+        self.url = reverse("api:forgot_password")
+
+    def test_anonymous_user_can_send_request(self): # Unittest - Authentication
+        response = self.client.post(self.url, {"email":"sina@email.com"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_invalid_email(self): # Unittest - Validation
+        response = self.client.post(self.url, {"email":"wrong-email"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
+    @mock.patch("api.views.send_reset_password_email")
+    @mock.patch("api.views.build_reset_password_link")
+    @mock.patch("api.views.get_user_by_email")
+    def test_send_reset_email_successfully(self, mock_get_user, mock_build_link, mock_send_email):
+        mock_get_user.return_value = self.user
+        mock_build_link.return_value = "http://test/reset"
+        response = self.client.post(self.url, {"email":self.user.email}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_get_user.assert_called_once_with(email=self.user.email)
+        mock_build_link.assert_called_once_with(self.user)
+        mock_send_email.assert_called_once_with(user=self.user, reset_url="http://test/reset")
+
+    @mock.patch("api.views.send_reset_password_email")
+    @mock.patch("api.views.get_user_by_email")
+    def test_email_not_sent_for_unknown_user(self, mock_get_user, mock_send_email):
+        mock_get_user.return_value = None
+        response = self.client.post(self.url, {"email":"unknown@email.com"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_send_email.assert_not_called()
+
+    def test_existing_user_receives_success_response(self): # Integration Test
+        response = self.client.post(self.url, {"email":self.user.email}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["message"], "a reset link has been sent.")
+
+    def test_unknown_user_receives_success_response(self): # Integration Test
+        response = self.client.post(self.url, {"email":"unknown@email.com"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["message"], "a reset link has been sent.")

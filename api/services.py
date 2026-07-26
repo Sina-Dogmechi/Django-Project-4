@@ -49,7 +49,7 @@ def build_reset_password_link(user):
 
 
 def send_reset_password_email(*, user, reset_url):
-    html_content = render_to_string('accounts/reset_password.html', {'reset_url': reset_url})
+    html_content = render_to_string('api/reset_password.html', {'reset_url': reset_url})
     email = EmailMultiAlternatives(subject='Reset Password', body=f"Reset Your Password {reset_url}", from_email=settings.EMAIL_HOST_USER, to=[user.email])
     email.attach_alternative(html_content, "text/html")
     email.send()

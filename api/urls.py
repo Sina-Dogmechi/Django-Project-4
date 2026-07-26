@@ -8,4 +8,5 @@ urlpatterns = [
     path('profile/', views.UserProfileView.as_view(), name='profile'),
     path('change-password/', views.UserChangePasswordView.as_view(), name='change_password'),
     path('deactivate/<int:pk>/',views.UserDeactivateView.as_view(), name='deactivate'),
+    path("forgot-password/", views.ForgotPasswordView.as_view(), name="forgot_password"),
 ]
