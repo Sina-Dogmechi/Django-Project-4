@@ -1,5 +1,5 @@
 from django.test import TestCase
-from api.services import create_user
+from api.services import create_user, update_profile
 from unittest import mock
 from django.contrib.auth.models import User
 
@@ -40,3 +40,38 @@ class CreateUserServiceTest(TestCase):
 
         with self.assertRaises(Exception):
             create_user(email="sina@email.com", username="sina", password="sinapass")
+
+
+class UpdateProfileServiceTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="sina@email.com", username="sina", password="sinapass")
+
+    def test_update_username_successfully(self):
+        user = update_profile(user=self.user, username="jack")
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.username, "jack")
+        self.assertEqual(user.username, "jack")
+
+    def test_return_update_user(self):
+        user = update_profile(user=self.user, username="jack")
+
+        self.assertEqual(user.pk, self.user.pk)
+
+    def test_email_does_not_change(self):
+        old_email = self.user.email
+        update_profile(user=self.user, username="jack")
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.email, old_email)
+
+    def test_only_username_is_updated(self):
+        old_password = self.user.password
+        update_profile(user=self.user, username="jack")
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.password, old_password)
+        self.assertTrue(self.user.check_password("sinapass"))
