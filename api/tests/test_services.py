@@ -1,5 +1,5 @@
 from django.test import TestCase
-from api.services import create_user, update_profile
+from api.services import create_user, update_profile, change_password
 from unittest import mock
 from django.contrib.auth.models import User
 
@@ -75,3 +75,47 @@ class UpdateProfileServiceTest(TestCase):
 
         self.assertEqual(self.user.password, old_password)
         self.assertTrue(self.user.check_password("sinapass"))
+
+
+class ChangePasswordServiceTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="sina@email.com", username="sina", password="sinapass")
+
+    def test_change_password_successfully(self):
+        user = change_password(user=self.user, new_password="new_pass")
+
+        self.user.refresh_from_db()
+
+        self.assertTrue(self.user.check_password("new_pass"))
+        self.assertEqual(user.pk, self.user.pk)
+
+    def test_old_password_is_not_valid(self):
+        change_password(user=self.user, new_password="new_pass")
+
+        self.user.refresh_from_db()
+
+        self.assertFalse(self.user.check_password("sinapass"))
+
+    def test_password_is_hashed(self):
+        change_password(user=self.user, new_password="new_pass")
+
+        self.user.refresh_from_db()
+
+        self.assertNotEqual(self.user.password, "new_pass")
+        self.assertTrue(self.user.password.startswith("pbkdf2_"))
+
+    def test_return_updated_user(self):
+        user = change_password(user=self.user, new_password="new_pass")
+
+        self.assertIsInstance(user, User)
+        self.assertEqual(user.id, self.user.id)
+
+    def test_only_password_is_updated(self):
+        old_username = self.user.username
+        old_email = self.user.email
+        change_password(user=self.user, new_password="new_pass")
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.username, old_username)
+        self.assertEqual(self.user.email, old_email)
