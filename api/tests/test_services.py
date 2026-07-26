@@ -1,5 +1,5 @@
 from django.test import TestCase
-from api.services import create_user, update_profile, change_password, build_reset_password_link
+from api.services import create_user, update_profile, change_password, build_reset_password_link, send_reset_password_email
 from unittest import mock
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
@@ -150,3 +150,55 @@ class BuildResetPasswordLinkServiceTest(TestCase):
         link = build_reset_password_link(self.user)
 
         self.assertIn("/accounts/reset-password/", link)
+
+
+class SendResetPasswordEmailServiceTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(email="sina@email.com", username="sina", password="sinapass")
+        self.reset_url = "http://localhost/reset-password/token"
+
+    @mock.patch("api.services.EmailMultiAlternatives")
+    @mock.patch("api.services.render_to_string")
+    def test_send_reset_password_email_successfully(self, mock_render_to_string, mock_email_class):
+        mock_render_to_string.return_value = "<h1>Reset Password</h1>"
+
+        email_instance = mock.MagicMock()
+        mock_email_class.return_value = email_instance
+
+        send_reset_password_email(user=self.user, reset_url=self.reset_url)
+        mock_email_class.assert_called_once()
+        email_instance.send.assert_called_once()
+
+    @mock.patch("api.services.EmailMultiAlternatives")
+    @mock.patch("api.services.render_to_string")
+    def test_email_subject_is_correct(self, mock_render_to_string, mock_email_class):
+        mock_render_to_string.return_value = "<h1>Reset Password</h1>"
+        send_reset_password_email(user=self.user, reset_url=self.reset_url)
+        _, kwargs = mock_email_class.call_args
+
+        self.assertEqual(kwargs["subject"], "Reset Password")
+
+    @mock.patch("api.services.EmailMultiAlternatives")
+    @mock.patch("api.services.render_to_string")
+    def test_email_is_sent_to_correct_user(self, mock_render_to_string, mock_email_class):
+        mock_render_to_string.return_value = "<h1>Reset Password</h1>"
+        send_reset_password_email(user=self.user, reset_url=self.reset_url)
+        _, kwargs = mock_email_class.call_args
+
+        self.assertEqual(kwargs["to"], [self.user.email])
+
+    @mock.patch("api.services.EmailMultiAlternatives")
+    @mock.patch("api.services.render_to_string")
+    def test_html_email_is_attached(self, mock_render_to_string, mock_email_class):
+        mock_render_to_string.return_value = "<h1>Reset Password</h1>"
+
+        send_reset_password_email(user=self.user, reset_url=self.reset_url)
+
+        mock_email_class.return_value.attach_alternative.assert_called_once_with("<h1>Reset Password</h1>", "text/html")
+
+    @mock.patch("api.services.EmailMultiAlternatives")
+    @mock.patch("api.services.render_to_string")
+    def test_template_receives_reset_url(self, mock_render_to_string, mock_email_class):
+        send_reset_password_email(user=self.user, reset_url=self.reset_url)
+
+        mock_render_to_string.assert_called_once_with("api/reset_password.html", {"reset_url":self.reset_url})
